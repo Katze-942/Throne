@@ -136,51 +136,119 @@ namespace Configs {
         return {obj, ""};
     }
 
+    namespace {
+        bool stringListContains(const QStringList& list, const QString& value) {
+            return list.contains(value);
+        }
+
+        const QStringList& knownXHTTPExtraKeys() {
+            static const QStringList keys = {
+                "headers",
+                "xPaddingBytes",
+                "noGRPCHeader",
+                "scMaxEachPostBytes",
+                "scMinPostsIntervalMs",
+                "xmux",
+                "downloadSettings",
+            };
+            return keys;
+        }
+
+        const QStringList& knownXHTTPXmuxKeys() {
+            static const QStringList keys = {
+                "maxConcurrency",
+                "maxConnections",
+                "cMaxReuseTimes",
+                "hMaxRequestTimes",
+                "hMaxReusableSecs",
+                "hKeepAlivePeriod",
+            };
+            return keys;
+        }
+
+        void exportString(QJsonObject& obj, const QString& key, const QString& value) {
+            if (value.isEmpty()) obj.remove(key);
+            else obj[key] = value;
+        }
+
+        void exportBool(QJsonObject& obj, const QString& key, bool value) {
+            if (value) obj[key] = true;
+            else obj.remove(key);
+        }
+
+        void exportLongLong(QJsonObject& obj, const QString& key, long long value) {
+            if (value != 0) obj[key] = value;
+            else obj.remove(key);
+        }
+
+        void parseXHTTPXmuxObject(xrayXHTTP* config, const QJsonObject& obj) {
+            for (const auto& key : obj.keys()) {
+                if (!stringListContains(knownXHTTPXmuxKeys(), key)) {
+                    config->rawXmux[key] = obj[key];
+                }
+            }
+            if (obj.contains("maxConcurrency")) {
+                config->maxConcurrency = obj["maxConcurrency"].toVariant().toString();
+            }
+            if (obj.contains("maxConnections")) {
+                config->maxConnections = obj["maxConnections"].toVariant().toString();
+            }
+            if (obj.contains("cMaxReuseTimes")) {
+                config->cMaxReuseTimes = obj["cMaxReuseTimes"].toVariant().toString();
+            }
+            if (obj.contains("hMaxRequestTimes")) {
+                config->hMaxRequestTimes = obj["hMaxRequestTimes"].toVariant().toString();
+            }
+            if (obj.contains("hMaxReusableSecs")) {
+                config->hMaxReusableSecs = obj["hMaxReusableSecs"].toVariant().toString();
+            }
+            if (obj.contains("hKeepAlivePeriod")) {
+                config->hKeepAlivePeriod = obj["hKeepAlivePeriod"].toVariant().toLongLong();
+            }
+        }
+
+        void parseXHTTPExtraObject(xrayXHTTP* config, const QJsonObject& obj) {
+            for (const auto& key : obj.keys()) {
+                if (!stringListContains(knownXHTTPExtraKeys(), key)) {
+                    config->rawExtra[key] = obj[key];
+                }
+            }
+
+            if (obj.contains("headers")) {
+                if (obj["headers"].isObject()) {
+                    config->headers = jsonObjectToQStringList(obj["headers"].toObject());
+                } else if (obj["headers"].isArray()) {
+                    config->headers = QJsonArray2QListString(obj["headers"].toArray());
+                }
+            }
+            if (obj.contains("xPaddingBytes")) {
+                config->xPaddingBytes = obj["xPaddingBytes"].toVariant().toString();
+            }
+            if (obj.contains("noGRPCHeader")) config->noGRPCHeader = obj["noGRPCHeader"].toBool();
+            if (obj.contains("scMaxEachPostBytes")) {
+                config->scMaxEachPostBytes = obj["scMaxEachPostBytes"].toVariant().toString();
+            }
+            if (obj.contains("scMinPostsIntervalMs")) {
+                config->scMinPostsIntervalMs = obj["scMinPostsIntervalMs"].toVariant().toString();
+            }
+            if (obj.contains("downloadSettings")) {
+                if (obj["downloadSettings"].isObject()) {
+                    config->downloadSettings = QJsonObject2QString(obj["downloadSettings"].toObject(), true);
+                } else if (obj["downloadSettings"].isString()) {
+                    config->downloadSettings = obj["downloadSettings"].toString();
+                }
+            }
+            if (auto xmuxObj = obj["xmux"].toObject(); !xmuxObj.isEmpty()) {
+                parseXHTTPXmuxObject(config, xmuxObj);
+            }
+        }
+    }
+
     bool xrayXHTTP::ParseExtraJson(QString str) {
         str = str.replace('\'', '"').replace("True", "true").replace("False", "false");
         auto obj = QString2QJsonObject(str);
         if (obj.isEmpty()) return false;
-
-        if (obj.contains("headers") && obj["headers"].isArray()) {
-            headers = QJsonArray2QListString(obj["headers"].toArray());
-        }
-        if (obj.contains("xPaddingBytes")) {
-            xPaddingBytes = obj["xPaddingBytes"].toVariant().toString();
-        }
-        if (obj.contains("noGRPCHeader")) noGRPCHeader = obj["noGRPCHeader"].toBool();
-        if (obj.contains("scMaxEachPostBytes")) {
-            scMaxEachPostBytes = obj["scMaxEachPostBytes"].toVariant().toString();
-        }
-        if (obj.contains("scMinPostsIntervalMs")) {
-            scMinPostsIntervalMs = obj["scMinPostsIntervalMs"].toVariant().toString();
-        }
-        if (obj.contains("downloadSettings")) {
-            if (obj["downloadSettings"].isObject()) {
-                downloadSettings = QJsonObject2QString(obj["downloadSettings"].toObject(), true);
-            } else if (obj["downloadSettings"].isString()) {
-                downloadSettings = obj["downloadSettings"].toString();
-            }
-        }
-        if (auto xmuxObj = obj["xmux"].toObject(); !xmuxObj.isEmpty()) {
-            if (xmuxObj.contains("maxConcurrency")) {
-                maxConcurrency = xmuxObj["maxConcurrency"].toVariant().toString();
-            }
-            if (xmuxObj.contains("maxConnections")) {
-                maxConnections = xmuxObj["maxConnections"].toVariant().toString();
-            }
-            if (xmuxObj.contains("cMaxReuseTimes")) {
-                cMaxReuseTimes = xmuxObj["cMaxReuseTimes"].toVariant().toString();
-            }
-            if (xmuxObj.contains("hMaxRequestTimes")) {
-                hMaxRequestTimes = xmuxObj["hMaxRequestTimes"].toVariant().toString();
-            }
-            if (xmuxObj.contains("hMaxReusableSecs")) {
-                hMaxReusableSecs = xmuxObj["hMaxReusableSecs"].toVariant().toString();
-            }
-            if (xmuxObj.contains("hKeepAlivePeriod")) {
-                hKeepAlivePeriod = xmuxObj["hKeepAlivePeriod"].toVariant().toLongLong();
-            }
-        }
+        parseXHTTPExtraObject(this, obj);
         return true;
     }
 
@@ -224,8 +292,18 @@ namespace Configs {
         if (object.contains("host")) host = object["host"].toString();
         if (object.contains("path")) path = object["path"].toString();
         if (object.contains("mode")) mode = object["mode"].toString();
+        QJsonObject topLevelExtra;
+        for (const auto& key : object.keys()) {
+            if (key == "host" || key == "path" || key == "mode" || key == "extra") continue;
+            topLevelExtra[key] = object[key];
+        }
+        if (!topLevelExtra.isEmpty()) {
+            parseXHTTPExtraObject(this, topLevelExtra);
+        }
         if (auto exObj = object["extra"].toObject(); !exObj.isEmpty()) {
-            ParseExtraJson(QJsonObject2QString(exObj, true));
+            parseXHTTPExtraObject(this, exObj);
+        } else if (object["extra"].isString()) {
+            ParseExtraJson(object["extra"].toString());
         }
         return true;
     }
@@ -252,25 +330,31 @@ namespace Configs {
         if (!path.isEmpty()) obj["path"] = path;
         if (!mode.isEmpty()) obj["mode"] = mode;
 
-        QJsonObject extraObj;
+        QJsonObject extraObj = rawExtra;
         if (!headers.isEmpty()) extraObj["headers"] = qStringListToJsonObject(headers);
-        if (!xPaddingBytes.isEmpty()) extraObj["xPaddingBytes"] = xPaddingBytes;
-        if (noGRPCHeader) extraObj["noGRPCHeader"] = true;
-        if (!scMaxEachPostBytes.isEmpty()) extraObj["scMaxEachPostBytes"] = scMaxEachPostBytes;
-        if (!scMinPostsIntervalMs.isEmpty()) extraObj["scMinPostsIntervalMs"] = scMinPostsIntervalMs;
-        if (!downloadSettings.isEmpty()) {
+        else extraObj.remove("headers");
+        exportString(extraObj, "xPaddingBytes", xPaddingBytes);
+        exportBool(extraObj, "noGRPCHeader", noGRPCHeader);
+        exportString(extraObj, "scMaxEachPostBytes", scMaxEachPostBytes);
+        exportString(extraObj, "scMinPostsIntervalMs", scMinPostsIntervalMs);
+        if (mode == "stream-one") {
+            extraObj.remove("downloadSettings");
+        } else if (!downloadSettings.isEmpty()) {
             if (auto dsObj = QString2QJsonObject(downloadSettings); !dsObj.isEmpty()) {
                 extraObj["downloadSettings"] = dsObj;
             }
+        } else {
+            extraObj.remove("downloadSettings");
         }
-        QJsonObject xmuxObj;
-        if (!maxConcurrency.isEmpty()) xmuxObj["maxConcurrency"] = maxConcurrency;
-        if (!maxConnections.isEmpty()) xmuxObj["maxConnections"] = maxConnections;
-        if (!cMaxReuseTimes.isEmpty()) xmuxObj["cMaxReuseTimes"] = cMaxReuseTimes;
-        if (!hMaxRequestTimes.isEmpty()) xmuxObj["hMaxRequestTimes"] = hMaxRequestTimes;
-        if (!hMaxReusableSecs.isEmpty()) xmuxObj["hMaxReusableSecs"] = hMaxReusableSecs;
-        if (hKeepAlivePeriod > 0) xmuxObj["hKeepAlivePeriod"] = hKeepAlivePeriod;
+        QJsonObject xmuxObj = rawXmux;
+        exportString(xmuxObj, "maxConcurrency", maxConcurrency);
+        exportString(xmuxObj, "maxConnections", maxConnections);
+        exportString(xmuxObj, "cMaxReuseTimes", cMaxReuseTimes);
+        exportString(xmuxObj, "hMaxRequestTimes", hMaxRequestTimes);
+        exportString(xmuxObj, "hMaxReusableSecs", hMaxReusableSecs);
+        exportLongLong(xmuxObj, "hKeepAlivePeriod", hKeepAlivePeriod);
         if (!xmuxObj.isEmpty()) extraObj["xmux"] = xmuxObj;
+        else extraObj.remove("xmux");
         if (!extraObj.isEmpty()) obj["extra"] = extraObj;
         return obj;
     }

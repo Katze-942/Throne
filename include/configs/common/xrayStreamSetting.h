@@ -42,12 +42,14 @@ namespace Configs {
         QString path;
         QString mode = "auto";
         // extra
+        QJsonObject rawExtra;
         QStringList headers;
         QString xPaddingBytes;
         bool noGRPCHeader = false;
         QString scMaxEachPostBytes; // packet-up only
         QString scMinPostsIntervalMs; // packet-up only
         // extra/xmux
+        QJsonObject rawXmux;
         QString maxConcurrency;
         QString maxConnections;
         QString cMaxReuseTimes;
