@@ -175,7 +175,7 @@ namespace Configs {
                 // Build reversed hop list (matching main-chain build order: outer first)
                 QList<int> reversedHops;
                 for (int idx = chain->list.size() - 1; idx >= 0; idx--) reversedHops << chain->list[idx];
-                preReqs->routingDeps->routeOutboundGroups << reversedHops;
+                preReqs->routingDeps->routeOutboundGroups << RoutingDeps::RouteOutboundGroup{reversedHops, neededEnt};
                 suffix += chain->list.size();
             } else {
                 // Single-hop outbound (existing logic)
@@ -189,7 +189,7 @@ namespace Configs {
                     preReqs->dnsDeps->needDirectDnsRules = true;
                 }
                 preReqs->routingDeps->outboundMap[item] = "route-" + Int2String(suffix++);
-                preReqs->routingDeps->routeOutboundGroups << QList<int>{item};
+                preReqs->routingDeps->routeOutboundGroups << RoutingDeps::RouteOutboundGroup{QList<int>{item}, nullptr};
             }
         }
 
@@ -217,6 +217,29 @@ namespace Configs {
                     preReqs->dnsDeps->directRegexes << item.mid(6);
                 }
                 preReqs->dnsDeps->needDirectDnsRules = true;
+            }
+
+            // Proxy sites (symmetric to direct sites): when the final DNS is
+            // direct these need an explicit remote-DNS carve-out, otherwise
+            // they'd resolve via direct DNS.
+            auto proxySets = routeChain->get_proxy_sites();
+            for (const auto &item: proxySets) {
+                if (item.startsWith("ruleset:")) {
+                    preReqs->dnsDeps->proxyRuleSets << item.mid(8);
+                }
+                if (item.startsWith("domain:")) {
+                    preReqs->dnsDeps->proxyDomains << item.mid(7);
+                }
+                if (item.startsWith("suffix:")) {
+                    preReqs->dnsDeps->proxySuffixes << item.mid(7);
+                }
+                if (item.startsWith("keyword:")) {
+                    preReqs->dnsDeps->proxyKeywords << item.mid(8);
+                }
+                if (item.startsWith("regex:")) {
+                    preReqs->dnsDeps->proxyRegexes << item.mid(6);
+                }
+                preReqs->dnsDeps->needProxyDnsRules = true;
             }
         }
         if (auto entAddrs = getEntDomains({ctx->ent->id}, ctx->error); !entAddrs.isEmpty())
@@ -304,7 +327,6 @@ namespace Configs {
             ctx->buildConfigResult->extraCoreData->path = QFileInfo(outbound->extraCorePath).canonicalFilePath();
             ctx->buildConfigResult->extraCoreData->args = outbound->extraCoreArgs;
             ctx->buildConfigResult->extraCoreData->config = outbound->extraCoreConf;
-            ctx->buildConfigResult->extraCoreData->configDir = GetBasePath();
             ctx->buildConfigResult->extraCoreData->noLog = outbound->noLogs;
         }
     }
@@ -568,6 +590,24 @@ namespace Configs {
                 };
         }
 
+        // Symmetric to the direct carve-out above: when the final DNS is direct,
+        // proxy-routed sites would otherwise resolve via direct DNS, so route
+        // them to remote DNS (when final is remote they reach it via the final
+        // rule, and the direct carve-out already runs first to keep server
+        // hostnames on direct DNS).
+        if (dnsDeps->needProxyDnsRules && dataManager->settingsRepo->dns_final_out != "remote") {
+            rules += QJsonObject{
+                    {"rule_set", dnsDeps->proxyRuleSets},
+                    {"domain", dnsDeps->proxyDomains},
+                    {"domain_suffix", dnsDeps->proxySuffixes},
+                    {"domain_keyword", dnsDeps->proxyKeywords},
+                    {"domain_regex", dnsDeps->proxyRegexes},
+                    {"action", "route"},
+                    {"strategy", dataManager->settingsRepo->remote_dns_strategy},
+                    {"server", "dns-remote"},
+                };
+        }
+
         // final rule: proxy
         auto finalStrategy = dataManager->settingsRepo->dns_final_out == "remote" ? dataManager->settingsRepo->remote_dns_strategy : dataManager->settingsRepo->direct_dns_strategy;
         auto finalDNS = dataManager->settingsRepo->dns_final_out == "remote" ? "dns-remote" : "dns-direct";
@@ -816,7 +856,6 @@ namespace Configs {
             {
                 ctx->outbounds.append(object);
             }
-            ctx->buildConfigResult->outboundEntsForTraffic.append({ent, tag});
         }
     }
 
@@ -860,6 +899,11 @@ namespace Configs {
 
     void buildOutboundChain(std::shared_ptr<BuildSingBoxConfigContext> &ctx, const QList<int>& entIDs, const QString& prefix, bool includeProxy, bool link, int singToXrayPort = -1, int xrayToSingPort = -1, int startSuffix = 0)
     {
+        // Core-transition flags are per-chain: entIDListtoEntList only ever
+        // sets them true, so clear any value left by a previous chain in this
+        // context before evaluating this one.
+        ctx->singToXrayTransitioned = false;
+        ctx->xrayToSingTransitioned = false;
         QList<std::shared_ptr<Profile>> ents;
         entIDListtoEntList(ctx, entIDs, ents, ctx->error);
         if (!ctx->error.isEmpty()) return;
@@ -943,6 +987,27 @@ namespace Configs {
         if (!tailingSingEnts.isEmpty()) {
             buildSingboxChain(ctx, tailingSingEnts, prefix, false, link, startSuffix + initialSingEnts.size(), true);
         }
+
+        // Traffic group: watchTag is the matched outbound of the last routing
+        // rule that points into this chain on the sing-box side. With no xray
+        // re-entry that's the first hop of initialSingEnts; with an xray->sing
+        // re-entry (interlocking [sing,xray,sing] pattern) the bridge inbound's
+        // route rule sends traffic to the first hop of tailingSingEnts and that
+        // becomes the egress-side watch point. profiles is the original user
+        // chain — synthetic socks bridges are appended to initialSingEnts above
+        // but never enter `ents`, so they're naturally excluded.
+        if (!ents.isEmpty()) {
+            TrafficChainGroup group;
+            group.profiles = ents;
+            if (!tailingSingEnts.isEmpty()) {
+                group.watchTag = prefix + "-" + Int2String(startSuffix + initialSingEnts.size());
+            } else if (includeProxy) {
+                group.watchTag = "proxy";
+            } else {
+                group.watchTag = prefix + "-" + Int2String(startSuffix);
+            }
+            ctx->buildConfigResult->chainGroups.append(group);
+        }
     }
 
     void buildOutboundsSection(std::shared_ptr<BuildSingBoxConfigContext> &ctx) {
@@ -974,12 +1039,24 @@ namespace Configs {
         }
         buildOutboundChain(ctx, entIDs, "config", true, true);
 
+        // A chain-typed profile wrapper isn't in entIDs (only its hops are),
+        // so the chainGroup just built doesn't include it. Add it so the
+        // chain's row in the proxy list also accumulates traffic.
+        if (ctx->ent->type == "chain" && !ctx->buildConfigResult->chainGroups.isEmpty()) {
+            ctx->buildConfigResult->chainGroups.last().profiles.append(ctx->ent);
+        }
+
         // Now, build the outbounds needed by the route profile
         int routeSuffix = 0;
-        for (const auto& outboundGroup : ctx->buildPrerequisities->routingDeps->routeOutboundGroups) {
-            bool linked = outboundGroup.size() > 1;
-            buildOutboundChain(ctx, outboundGroup, "route", false, linked, -1, -1,  routeSuffix);
-            routeSuffix += outboundGroup.size();
+        for (const auto& routeGroup : ctx->buildPrerequisities->routingDeps->routeOutboundGroups) {
+            bool linked = routeGroup.hopIDs.size() > 1;
+            buildOutboundChain(ctx, routeGroup.hopIDs, "route", false, linked, -1, -1, routeSuffix);
+            // Same as main chain: credit the chain wrapper if the route rule's
+            // referenced outbound was a chain.
+            if (routeGroup.chainWrapper != nullptr && !ctx->buildConfigResult->chainGroups.isEmpty()) {
+                ctx->buildConfigResult->chainGroups.last().profiles.append(routeGroup.chainWrapper);
+            }
+            routeSuffix += routeGroup.hopIDs.size();
         }
 
         // Also add the needed socks inbound bridges
@@ -1014,7 +1091,6 @@ namespace Configs {
         {"tag", "direct"}
         });
 
-        if (entIDs.size() > 1) ctx->buildConfigResult->isChained = true;
         ctx->buildConfigResult->coreConfig["endpoints"] = ctx->endpoints;
         ctx->buildConfigResult->coreConfig["outbounds"] = ctx->outbounds;
     }
@@ -1518,8 +1594,6 @@ namespace Configs {
                 singToXrayPort = xrayPorts[xrayPortIdx++];
                 xrayToSingPort = xrayPorts[xrayPortIdx++];
             }
-            ctx->singToXrayTransitioned = false;
-            ctx->xrayToSingTransitioned = false;
             buildOutboundChain(ctx, IDs, "proxy-" + Int2String(suffix), false, true, singToXrayPort, xrayToSingPort);
             if (!ctx->error.isEmpty()) {
                 res->error = ctx->error;
