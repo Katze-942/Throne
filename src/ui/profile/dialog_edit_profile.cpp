@@ -517,7 +517,6 @@ void DialogEditProfile::typeSelected(const QString &newType) {
         ui->xray_scMinPostsIntervalMs->setText(xrayStream->xhttp->scMinPostsIntervalMs);
         ui->xray_scMaxBufferedPosts->setText(xrayStream->xhttp->scMaxBufferedPosts);
         ui->xray_scStreamUpServerSecs->setText(xrayStream->xhttp->scStreamUpServerSecs);
-        ui->xray_serverMaxHeaderBytes->setText(xrayStream->xhttp->serverMaxHeaderBytes);
         ui->xray_max_concurrency->setText(xrayStream->xhttp->maxConcurrency);
         ui->xray_max_connections->setText(xrayStream->xhttp->maxConnections);
         ui->xray_hMaxRequestTimes->setText(xrayStream->xhttp->hMaxRequestTimes);
@@ -751,7 +750,6 @@ bool DialogEditProfile::onEnd() {
             xrayStream->xhttp->scMinPostsIntervalMs = ui->xray_scMinPostsIntervalMs->text();
             xrayStream->xhttp->scMaxBufferedPosts = ui->xray_scMaxBufferedPosts->text();
             xrayStream->xhttp->scStreamUpServerSecs = ui->xray_scStreamUpServerSecs->text();
-            xrayStream->xhttp->serverMaxHeaderBytes = ui->xray_serverMaxHeaderBytes->text();
             xrayStream->xhttp->maxConcurrency = ui->xray_max_concurrency->text();
             xrayStream->xhttp->maxConnections = ui->xray_max_connections->text();
             xrayStream->xhttp->hMaxRequestTimes = ui->xray_hMaxRequestTimes->text();

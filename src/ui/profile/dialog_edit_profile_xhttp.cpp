@@ -61,9 +61,6 @@ void DialogEditProfile::setupXrayXHTTPDescriptions() {
                         "is removed when saving stream-one mode."));
     setXrayXHTTPHelp(ui->label_23, ui->xray_xpaddingbytes, tr("X Padding Bytes"), "xPaddingBytes",
                      tr("Range of extra XHTTP padding bytes. Default: 100-1000. If set, both bounds must be positive."));
-    setXrayXHTTPHelp(ui->xray_serverMaxHeaderBytes_l, ui->xray_serverMaxHeaderBytes,
-                     tr("Server Max Header Bytes"), "serverMaxHeaderBytes",
-                     tr("Maximum request header size accepted by the server. Default: 8192."));
     setXrayXHTTPHelp(ui->xray_xpadding_obfs_mode, nullptr, tr("Enable Padding Obfuscation"),
                      "xPaddingObfsMode",
                      tr("Enable custom X-Padding placement, key, header, and method. When disabled, "
@@ -175,6 +172,17 @@ bool DialogEditProfile::validateXrayXHTTPSettings() {
         MessageBoxWarning(software_name,
                           tr("XHTTP maxConnections cannot be specified together with maxConcurrency."));
         return false;
+    }
+
+    const auto scMaxBufferedPosts = ui->xray_scMaxBufferedPosts->text().trimmed();
+    if (!scMaxBufferedPosts.isEmpty()) {
+        bool ok = false;
+        const auto value = scMaxBufferedPosts.toLongLong(&ok);
+        if (!ok || value < 0) {
+            MessageBoxWarning(software_name,
+                              tr("XHTTP scMaxBufferedPosts must be a non-negative integer."));
+            return false;
+        }
     }
 
     return true;

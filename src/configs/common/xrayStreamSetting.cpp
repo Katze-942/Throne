@@ -108,7 +108,6 @@ namespace Configs {
                 "scMinPostsIntervalMs",
                 "scMaxBufferedPosts",
                 "scStreamUpServerSecs",
-                "serverMaxHeaderBytes",
                 "xmux",
                 "downloadSettings",
             };
@@ -130,6 +129,16 @@ namespace Configs {
         void exportString(QJsonObject& object, const QString& key, const QString& value) {
             if (value.isEmpty()) object.remove(key);
             else object[key] = value;
+        }
+
+        void exportIntegerString(QJsonObject& object, const QString& key, const QString& value) {
+            if (value.isEmpty()) {
+                object.remove(key);
+                return;
+            }
+            bool ok = false;
+            const auto number = value.toLongLong(&ok);
+            if (ok) object[key] = number;
         }
 
         void exportBool(QJsonObject& object, const QString& key, bool value) {
@@ -206,7 +215,6 @@ namespace Configs {
             parseVariantString(obj, "scMinPostsIntervalMs", config->scMinPostsIntervalMs);
             parseVariantString(obj, "scMaxBufferedPosts", config->scMaxBufferedPosts);
             parseVariantString(obj, "scStreamUpServerSecs", config->scStreamUpServerSecs);
-            parseVariantString(obj, "serverMaxHeaderBytes", config->serverMaxHeaderBytes);
             if (obj.contains("downloadSettings")) {
                 if (obj["downloadSettings"].isObject()) {
                     config->downloadSettings = QJsonObject2QString(obj["downloadSettings"].toObject(), true);
@@ -488,9 +496,8 @@ namespace Configs {
         exportBool(extraObj, "noSSEHeader", noSSEHeader);
         exportString(extraObj, "scMaxEachPostBytes", scMaxEachPostBytes);
         exportString(extraObj, "scMinPostsIntervalMs", scMinPostsIntervalMs);
-        exportString(extraObj, "scMaxBufferedPosts", scMaxBufferedPosts);
+        exportIntegerString(extraObj, "scMaxBufferedPosts", scMaxBufferedPosts);
         exportString(extraObj, "scStreamUpServerSecs", scStreamUpServerSecs);
-        exportString(extraObj, "serverMaxHeaderBytes", serverMaxHeaderBytes);
         if (mode == "stream-one") {
             extraObj.remove("downloadSettings");
         } else if (!downloadSettings.isEmpty()) {

@@ -67,7 +67,6 @@ namespace Configs {
         QString scMinPostsIntervalMs;
         QString scMaxBufferedPosts;
         QString scStreamUpServerSecs;
-        QString serverMaxHeaderBytes;
         // extra/xmux
         QJsonObject rawXmux;
         QString maxConcurrency;

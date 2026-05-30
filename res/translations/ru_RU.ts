@@ -824,14 +824,6 @@
         <translation>Диапазон дополнительных байтов заполнения XHTTP. По умолчанию: 100-1000. Если поле задано, обе границы должны быть положительными.</translation>
     </message>
     <message>
-        <source>Server Max Header Bytes</source>
-        <translation>Макс. размер заголовков сервера</translation>
-    </message>
-    <message>
-        <source>Maximum request header size accepted by the server. Default: 8192.</source>
-        <translation>Максимальный размер заголовков запроса, принимаемый сервером. По умолчанию: 8192.</translation>
-    </message>
-    <message>
         <source>Enable Padding Obfuscation</source>
         <translation>Включить обфускацию padding</translation>
     </message>
@@ -884,8 +876,12 @@
         <translation>Макс. буферизованных POST</translation>
     </message>
     <message>
-        <source>Packet-up server upload queue size per proxied connection. Default: 30.</source>
-        <translation>Размер очереди upload на сервере packet-up для одного проксируемого соединения. По умолчанию: 30.</translation>
+        <source>Packet-up server upload queue size per proxied connection. Numeric value only. Default: 30.</source>
+        <translation>Размер очереди upload на сервере packet-up для одного проксируемого соединения. Только числовое значение. По умолчанию: 30.</translation>
+    </message>
+    <message>
+        <source>XHTTP scMaxBufferedPosts must be a non-negative integer.</source>
+        <translation>XHTTP scMaxBufferedPosts должен быть неотрицательным целым числом.</translation>
     </message>
     <message>
         <source>Uplink HTTP Method</source>
